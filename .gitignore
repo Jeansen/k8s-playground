@@ -1,0 +1,6 @@
+out/**
+vm/**
+disks/*
+.vagrant/
+.vagrant.d/
+.idea/
