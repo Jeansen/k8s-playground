@@ -93,7 +93,7 @@ Vagrant.configure("2") do |config|
     config.vm.box = "debian/contrib-buster64"
 
     config.vm.provision "shell", inline: <<-SHELL
-        echo 'Acquire::http { Proxy "http://proxy:3142"; }' | tee -a /etc/apt/apt.conf.d/proxy
+        # echo 'Acquire::http { Proxy "http://proxy:3142"; }' | tee -a /etc/apt/apt.conf.d/proxy
         apt update && apt upgrade -y && apt-get -y install gnupg2 apt-transport-https ca-certificates curl gnupg-agent software-properties-common net-tools
         curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -;
         curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -;
