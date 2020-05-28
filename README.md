@@ -84,3 +84,20 @@ Copy the `token:` value and afterwards run the following command:
 Kubectl will make Dashboard available at `http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/`.
 
 Now paste the token into "Enter token field" on the login screen. You should then see the [Kubernetes Dashboard](https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/). 
+
+# Weave Scope
+To get a visual impression of a clusters network you can utilize [Weave Scope](https://www.weave.works/docs/scope/latest/installing/#k8s)
+
+To use it, run the following command:
+
+    kubectl port-forward -n weave "$(kubectl get -n weave pod --selector=weave-scope-component=app -o jsonpath='{.items..metadata.name}')" 4040
+
+This will make the Weave Scope dashboard available at `http://localhost:4040/`
+
+Here is an image of what the default cluster setup should look like (only nodes).
+
+
+![Weave Scope cluster nodes][cluster-nodes]
+
+[cluster-nodes]: .assets/cluster.png "Cluster nodes"
+
