@@ -28,9 +28,11 @@ vagrant ssh master.k8s  -c 'sudo cp /etc/kubernetes/admin.conf /out/'
 vagrant ssh master.k8s  -c 'sudo systemctl enable --now heketi.service'
 vagrant ssh master.k8s  -c 'sudo heketi-cli topology load --user admin --secret "My Secret"  --json=/in/heketi/topology_virtualbox.json'
 
-
 #Weaver Scope
 vagrant ssh master.k8s  -c 'kubectl apply -f "https://cloud.weave.works/k8s/scope.yaml?k8s-version=$(kubectl version | base64 | tr -d "\n")"'
+
+#Metrics Server for HPA
+vagrant ssh master.k8s  -c 'kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.3.6/components.yaml'
 
 # These are commands you'll have to run on the client so you can use kubectl with your custom cluster
 #
