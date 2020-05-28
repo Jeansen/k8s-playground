@@ -101,3 +101,7 @@ Here is an image of what the default cluster setup should look like (only nodes)
 
 [cluster-nodes]: .assets/cluster.png "Cluster nodes"
 
+#TODO
+- Examples
+- HPA
+- VP
