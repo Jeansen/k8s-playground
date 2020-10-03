@@ -12,7 +12,8 @@ vagrant ssh master.k8s  -c 'kubectl apply -f /in/dashboard/dashboard_user.yaml'
 vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta8/aio/deploy/recommended.yaml'
 
 #Ingress LoadBalancer
-vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-0.32.0/deploy/static/provider/cloud/deploy.yaml'
+#https://kubernetes.github.io/ingress-nginx/deploy/
+vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.40.0/deploy/static/provider/cloud/deploy.yaml'
 
 #metalLAB
 vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/namespace.yaml'
@@ -32,7 +33,7 @@ vagrant ssh master.k8s  -c 'sudo heketi-cli topology load --user admin --secret 
 vagrant ssh master.k8s  -c 'kubectl apply -f "https://cloud.weave.works/k8s/scope.yaml?k8s-version=$(kubectl version | base64 | tr -d "\n")"'
 
 #Metrics Server for HPA
-vagrant ssh master.k8s  -c 'kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.3.6/components.yaml'
+vagrant ssh master.k8s  -c 'kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/v0.3.7/components.yaml'
 
 # These are commands you'll have to run on the client so you can use kubectl with your custom cluster
 #
