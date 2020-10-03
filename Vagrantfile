@@ -93,14 +93,31 @@ Vagrant.configure("2") do |config|
     config.vm.box = "debian/contrib-buster64"
 
     config.vm.provision "shell", inline: <<-SHELL
-        # echo 'Acquire::http { Proxy "http://proxy:3142"; }' | tee -a /etc/apt/apt.conf.d/proxy
-        apt update && apt upgrade -y && apt-get -y install gnupg2 apt-transport-https ca-certificates curl gnupg-agent software-properties-common net-tools
+        echo 'Acquire::http { Proxy "http://proxy:3142"; }' | tee -a /etc/apt/apt.conf.d/proxy
+        apt-get update && apt-get -y install gnupg2 apt-transport-https ca-certificates curl gnupg-agent software-properties-common net-tools
         curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -;
         curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -;
         echo 'deb http://apt.kubernetes.io/ kubernetes-xenial main' > /etc/apt/sources.list.d/kubernetes.list;
         echo 'deb https://download.docker.com/linux/debian stretch stable' > /etc/apt/sources.list.d/docker.list;
         swapoff -a && sed -i '/ swap / s/^/#/' /etc/fstab;
-        apt update && apt install -y docker-ce kubelet kubeadm kubectl kubernetes-cni;
+        apt-get update && apt-get install -y docker-ce kubelet kubeadm kubectl kubernetes-cni;
+
+
+        # Set up the Docker daemon
+        f='{
+            "exec-opts": ["native.cgroupdriver=systemd"],
+            "log-driver": "json-file",
+            "log-opts": {
+                "max-size": "100m"
+            },
+            "storage-driver": "overlay2"
+        }'
+        echo "$f" | sudo tee /etc/docker/daemon.json
+
+        mkdir -p /etc/systemd/system/docker.service.d
+        systemctl daemon-reload
+        systemctl restart docker
+        systemctl enable docker
 
         #IPs here only needed when there is no DHCP
         echo 192.168.178.190  master.k8s >> /etc/hosts;
@@ -108,7 +125,7 @@ Vagrant.configure("2") do |config|
             echo 192.168.178.19${i}  node${i}.k8s >> /etc/hosts;
         done
         
-        apt install -y glusterfs-client glusterfs-server
+        apt-get install -y glusterfs-client glusterfs-server
         systemctl enable --now glusterd.service
     SHELL
 
