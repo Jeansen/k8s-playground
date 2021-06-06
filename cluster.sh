@@ -1,39 +1,125 @@
 #!/usr/bin/env bash
 
-vagrant up --no-provision
-vagrant provision
+export _HOME_="$(dirname $(realpath ${BASH_SOURCE[0]}))"
+[[ -z ${VAGRANT_HOME// } ]] && export VAGRANT_HOME="$_HOME_/.vagrant.d/"
+export VAGRANT_DEFAULT_PROVIDER=libvirt
+export LIBVIRT_DEFAULT_URI="qemu:///system" 
+export POOL_NAME="k8s"
+
+if [[ $VAGRANT_DEFAULT_PROVIDER == libvirt ]] && ! virsh pool-list --all | grep -qE "$POOL_NAME(\s|$)"; then
+    [[ -d $_HOME_/disks/ ]] || { echo "$_HOME_/disks/ does not exist" && exit 1; }
+    virsh pool-define-as $POOL_NAME dir - - - - $_HOME_/disks/
+fi
+
+
+case "$1" in
+'provision')
+    vagrant provision
+    ;;
+'halt')
+    vagrant halt
+    ;;
+'create'|'rebuild')
+    sudo systemctl restart nfs-server.service
+    virsh pool-start $POOL_NAME 2>/dev/null
+    vagrant destroy -f
+    vagrant up --no-provision
+    vagrant provision
+    ;;
+'suspend')
+    vagrant "$1"
+    exit 0
+    ;;
+'up'|'resume')
+    sudo systemctl restart nfs-server.service
+    virsh pool-start $POOL_NAME 2>/dev/null
+    vagrant "$1"
+    exit 0
+    ;;
+'destroy')
+    vagrant destroy -f
+    exit 0
+    ;;
+'ssh')
+    vagrant "$@"
+    exit 0
+    ;;
+*)
+    echo "<cluser.sh> rebuild|suspend|resume|destroy|up|create"
+    exit 1
+    ;;
+esac
+
+
 sleep 10
 #weavernet
-vagrant ssh master.k8s  -c 'kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d "\n")"'
+# vagrant ssh master.k8s  -- -t 'sudo ip -s -s neigh flush all'
+# vagrant ssh node1.k8s  -- -t 'sudo ip -s -s neigh flush all'
+# vagrant ssh node2.k8s  -- -t 'sudo ip -s -s neigh flush all'
 
-#Dashboard
-vagrant ssh master.k8s  -c 'kubectl apply -f /in/dashboard/admin_user.yaml'
-vagrant ssh master.k8s  -c 'kubectl apply -f /in/dashboard/dashboard_user.yaml'
-vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta8/aio/deploy/recommended.yaml'
+#flannel
+# vagrant ssh master.k8s  -- -t 'kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml'
 
-#Ingress LoadBalancer
-#https://kubernetes.github.io/ingress-nginx/deploy/
-vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.40.0/deploy/static/provider/cloud/deploy.yaml'
 
-#metalLAB
-vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/namespace.yaml'
-vagrant ssh master.k8s  -c 'kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.9.3/manifests/metallb.yaml'
-vagrant ssh master.k8s  -c 'kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"'
-vagrant ssh master.k8s  -c 'kubectl apply -f /in/metallab.yaml'
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Patch DNS"
+kubectl -n kube-system get configmap coredns -o yaml | sed "/forward/ s|/etc/resolv.conf|192.168.178.1:53|" | kubectl apply -f -
+kubectl delete pods -n kube-system -l k8s-app=kube-dns'
 
-#kubectl
-vagrant ssh master.k8s  -c "kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboard get secret | grep admin-user | awk '{print $1}') > /out/dashboard_secret"
-vagrant ssh master.k8s  -c 'sudo cp /etc/kubernetes/admin.conf /out/'
+#weave
+vagrant ssh master.k8s  -- -t 'kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d "\n")"'
 
-#Setup heketi
-vagrant ssh master.k8s  -c 'sudo systemctl enable --now heketi.service'
-vagrant ssh master.k8s  -c 'sudo heketi-cli topology load --user admin --secret "My Secret"  --json=/in/heketi/topology_virtualbox.json'
 
-#Weaver Scope
-vagrant ssh master.k8s  -c 'kubectl apply -f "https://cloud.weave.works/k8s/scope.yaml?k8s-version=$(kubectl version | base64 | tr -d "\n")"'
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Dashboard"
+helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
+helm repo update
+helm install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard'
 
-#Metrics Server for HPA
-vagrant ssh master.k8s  -c 'kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/v0.3.7/components.yaml'
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Rook (Ceph)"
+helm repo add rook-release https://charts.rook.io/release
+helm repo update
+helm install --wait --namespace rook-ceph rook-ceph rook-release/rook-ceph --create-namespace
+kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.6.3/cluster/examples/kubernetes/ceph/cluster-test.yaml
+kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.6.3/cluster/examples/kubernetes/ceph/csi/rbd/storageclass-test.yaml
+kubectl patch storageclass rook-ceph-block -p '"'"'{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'"'"
+
+sleep 5m
+
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Prometheus"
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts/
+helm repo update
+helm install prometheus prometheus-community/prometheus'
+
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Ingress LoadBalancer"
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+helm install ingress-nginx ingress-nginx/ingress-nginx'
+# helm pull ingress-nginx/ingress-nginx
+# mkdir mnt 
+# archivemount ingress-nginx*.tgz mnt/
+# sed "/digest:/d" mnt/ingress-nginx/values.yaml | sponge mnt/ingress-nginx/values.yaml
+# umount mnt/
+# helm install ingress-nginx ingress-nginx*.tgz
+
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: metalLAB"
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+helm install metallb bitnami/metallb
+kubectl apply -f /in/metallab.yaml'
+
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Kubectl"
+kubectl -n kubernetes-dashboard describe secret $(kubectl -n kubernetes-dashboard get secret | grep admin-user | awk "{print \$1}") > /out/dashboard_secret
+sudo cp /etc/kubernetes/admin.conf /out/'
+
+#vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Heketi"
+#sudo systemctl enable --now heketi.service
+#sudo heketi-cli topology load --user admin --secret "My Secret"  --json=/in/heketi/topology_virtualbox.json'
+
+#echo "[SETUP]: Weaver Scope"
+#kubectl apply -f "https://cloud.weave.works/k8s/scope.yaml?k8s-version=$(kubectl version | base64 | tr -d "\n")"
+
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Metrics Server for HPA"
+kubectl apply -f <(curl -fsSL https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.4.3/components.yaml | yq e '"'"'select(.spec.template.spec.containers.[].args) |= .spec.template.spec.containers.[].args += "--kubelet-insecure-tls"'"'"' -)'
+
 
 # These are commands you'll have to run on the client so you can use kubectl with your custom cluster
 #

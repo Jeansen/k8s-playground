@@ -8,8 +8,8 @@ You should have some basic knowledge of Vagrant and Kubernetes.
 
 Make sure you have the following tools installed:
 
-- Vagrant 2.2.7 (because of [this regression bug](https://github.com/hashicorp/vagrant/issues/11599) in the latest version)
-- Virtual Box 6.1
+- Vagrant >= 2.2.14 (because of [this regression bug](https://github.com/hashicorp/vagrant/issues/11599) in the latest version)
+- Virtual Box >= 6.1 or QEMU/KVM (any version)
 - kubenetes client (kubectl)
 
 Please have a look at the `Vagrantfile` and `cluster.sh` from within the repository folder. You might want to change the IP addresses and gateway to reflect you local settings.
@@ -32,6 +32,12 @@ Now, you have to prepare the context for `kubectl`:
 Now see if you can access the cluster with `kubectl`:
 
     kubectl cluster-info 
+
+## QEMU/KVM
+
+For QEMU/KVM to work, you need to have a working Ethernet connection, e.g. `eth0`. Wifi interfaces like `wlan0` will not work, except you have the knowledge and patience to create a LAN-WLAN bridge. But believe me, things will be much more simpler when you just use your RJ45 port!
+
+Anyway, running the cluster with QEMU/KVM is an advanced topic. To simply get things up and running, use Virtual Box!
 
 # Project structure
 
