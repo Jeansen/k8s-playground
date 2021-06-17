@@ -5,6 +5,7 @@ export _HOME_="$(dirname $(realpath ${BASH_SOURCE[0]}))"
 export VAGRANT_DEFAULT_PROVIDER=libvirt
 export LIBVIRT_DEFAULT_URI="qemu:///system" 
 export POOL_NAME="k8s"
+# export VAGRANT_LOG="debug"
 
 if [[ $VAGRANT_DEFAULT_PROVIDER == libvirt ]] && ! virsh pool-list --all | grep -qE "$POOL_NAME(\s|$)"; then
     [[ -d $_HOME_/disks/ ]] || { echo "$_HOME_/disks/ does not exist" && exit 1; }
@@ -38,6 +39,8 @@ case "$1" in
     ;;
 'destroy')
     vagrant destroy -f
+    rm -f $_HOME_/disks/*
+    virsh pool-refresh $POOL_NAME
     exit 0
     ;;
 'ssh')
@@ -83,6 +86,9 @@ kubectl apply -f https://raw.githubusercontent.com/rook/rook/v1.6.3/cluster/exam
 kubectl patch storageclass rook-ceph-block -p '"'"'{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'"'"
 
 sleep 5m
+
+vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Remove taints"
+kubectl taint nodes --all node-role.kubernetes.io/master-'
 
 vagrant ssh master.k8s  -- -t 'echo "[SETUP]: Prometheus"
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts/

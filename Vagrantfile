@@ -11,9 +11,14 @@ LIBVIRT_DEFAULT_URI = ENV['LIBVIRT_DEFAULT_URI'] || 'qemu:///system'
 DISKS = 2
 NODES = 2
 
+ENV['VAGRANT_INSTALL_LOCAL_PLUGINS'] = "true"
+
 Vagrant.configure('2') do |config|
   # Your gatewway. In my case its a FritzBox
   gw = '192.168.178.1'
+  public_if = "eth0"
+
+  config.vagrant.plugins = ["vagrant-libvirt"] if ENV['VAGRANT_DEFAULT_PROVIDER'] == 'libvirt'
 
   config.vm.define 'master.k8s', primary: true do |subconfig|
     subconfig.vm.provider 'virtualbox' do |v|
@@ -21,7 +26,7 @@ Vagrant.configure('2') do |config|
     end
 
     if ENV['VAGRANT_DEFAULT_PROVIDER'] == 'libvirt'
-      subconfig.vm.network :public_network, dev: 'eth0', mac: '080027A08AB0'
+      subconfig.vm.network :public_network, dev: public_if, mac: '080027A08AB0'
     else
       subconfig.vm.network :public_network, bridge: 'wlan0', ip: '192.168.178.190'
     end
@@ -36,7 +41,7 @@ Vagrant.configure('2') do |config|
 
     subconfig.vm.provision 'shell',
       inline: <<-SHELL
-        ipa=$(ip -br addr | awk '{ if ($2 == "UP" && $3 ~ /192.168.121./ ) print $3 }');
+        ipa=$(ip -br addr | awk '{ if ($2 == "UP" && $3 ~ /192.168.178./ ) print $3 }');
 
         # kubeadm config print init-defaults --component-configs=KubeletConfiguration > "$KUBEADM_CONFIG"
         # yq -i eval 'select(.nodeRegistration.criSocket) |= .nodeRegistration.criSocket = "unix:///var/run/crio/crio.sock"' "$KUBEADM_CONFIG"
@@ -109,7 +114,7 @@ Vagrant.configure('2') do |config|
       end
 
       if ENV['VAGRANT_DEFAULT_PROVIDER'] == 'libvirt'
-        subconfig.vm.network :public_network, dev: 'eth0', mac: "080027A08AB#{i}"
+        subconfig.vm.network :public_network, dev: public_if, mac: "080027A08AB#{i}"
       else
         subconfig.vm.network :public_network, bridge: 'wlan0', ip: "192.168.178.19#{i}"
       end
@@ -184,7 +189,7 @@ Vagrant.configure('2') do |config|
 
     echo [PREFLIGHT] net settings
     echo "net.bridge.bridge-nf-call-ip6tables = 1
-		net.ipv6.conf.all.disable_ipv6 = 1
+    net.ipv6.conf.all.disable_ipv6 = 1
     net.bridge.bridge-nf-call-iptables = 1
     net.ipv4.ip_forward = 1" >> /etc/sysctl.d/k8s.conf
     sysctl --system
@@ -226,7 +231,7 @@ Vagrant.configure('2') do |config|
 #   apt-get install -y glusterfs-client glusterfs-server
 #   systemctl enable --now glusterd.service
 
-    go get -u github.com/mikefarah/yq/
+    GO111MODULE=on go get github.com/mikefarah/yq/v4
     install ${HOME}/go/bin/yq /usr/local/bin/
   SHELL
 
